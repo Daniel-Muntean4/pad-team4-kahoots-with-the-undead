@@ -4,3 +4,6 @@
 [submodule "resource-service"]
 	path = resource-service
 	url = git@github.com:Daniel-Muntean4/resource-service.git
+[submodule "zombie-service"]
+	path = zombie-service
+	url = git@github.com:Daniel-Muntean4/zombie-service.git
