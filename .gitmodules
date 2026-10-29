@@ -1,0 +1,3 @@
+[submodule "pad-gateway"]
+	path = pad-gateway
+	url = git@github.com:Daniel-Muntean4/pad-gateway.git
