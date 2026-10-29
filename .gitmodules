@@ -1,3 +1,6 @@
 [submodule "pad-gateway"]
 	path = pad-gateway
 	url = git@github.com:Daniel-Muntean4/pad-gateway.git
+[submodule "resource-service"]
+	path = resource-service
+	url = git@github.com:Daniel-Muntean4/resource-service.git
