@@ -7,3 +7,6 @@
 [submodule "zombie-service"]
 	path = zombie-service
 	url = git@github.com:Daniel-Muntean4/zombie-service.git
+[submodule "service-discovery"]
+	path = service-discovery
+	url = https://github.com/CristianGr233/service-discovery
