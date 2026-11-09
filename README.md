@@ -35,6 +35,7 @@ docker run -p 8080:8080 -e PLAYER_SERVICE_URL=http://host.docker.internal:8081 \
 | `RESOURCE_SERVICE_URL` | http://localhost:8084 | Resource Service (`http://resource-service:8082` in compose) |
 | `BASE_SERVICE_URL` | http://localhost:5007 | Base Service (`http://base-service:5007` in compose) |
 | `CRAFTING_SERVICE_URL` | http://localhost:5008 | Crafting Service (`http://crafting-service:5008` in compose) |
+| `EXAM_SERVICE_URL` | http://localhost:5009 | Exam Service (`http://exam-service:5009` in compose) |
 | `UPSTREAM_TIMEOUT_MS` | 10000 | after this, the gateway answers 504 (the "task timeout limit") |
 | `SERVICE_DISCOVERY_URL` | – | lab 3: where the Service Discovery lives (`http://service-discovery:8761` in compose). When set, the `*_SERVICE_URL` variables are ignored |
 | `SELF_URL` | – | the gateway's own address, so it can register itself too (`http://gateway:8080`)
@@ -49,10 +50,38 @@ docker run -p 8080:8080 -e PLAYER_SERVICE_URL=http://host.docker.internal:8081 \
 | `/api/resources/**` | resource-service |
 | `/api/bases/**` | base-service |
 | `/api/crafting/**` | crafting-service |
+| `/api/exams/**` | exam-service |
 
 The path, query string, method, headers (including `Authorization`) and body are forwarded unchanged,
 so every endpoint from the service READMEs works through the gateway, e.g.
 `POST http://localhost:8080/api/players/login`.
+
+## Architecture diagram
+
+```mermaid
+graph LR
+    GW[Gateway 8080] --> P[Player Service]
+    GW --> G[Game Service]
+    GW --> Z[Zombie Service]
+    GW --> R[Resource Service]
+    GW --> SD[Service Discovery]
+    GW --> B[Base Service]
+    GW --> C[Crafting Service]
+
+    B --> R
+    B --> P
+    C --> R
+    C --> P
+    C --> E[Exam Service]
+```
+
+**Base Service** owns base state per player, barricades, facilities, upgrades, and Kiki state.
+It depends on the **Resource Service** (spend resources) and the **Player Service** (grant Kiki rewards),
+and is reached through the **Gateway** at `/api/bases/**`.
+
+**Crafting Service** owns recipe definitions, craft operations, and recipe availability rules.
+It depends on the **Resource Service** (consume resources), the **Player Service** (grant crafted items),
+and the **Exam Service** (recipe unlocks), and is reached through the **Gateway** at `/api/crafting/**`.
 
 ## Gateway's own endpoints
 
