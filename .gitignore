@@ -1,5 +1,30 @@
+# Dependencies
 node_modules/
-.env
-*.log
-.kilo
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
 
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Agent / editor state
+.kilo
+.idea/
+.vscode/
+.DS_Store
+
+# Docker
+*.tar

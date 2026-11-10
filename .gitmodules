@@ -10,7 +10,15 @@
 [submodule "service-discovery"]
 	path = service-discovery
 	url = https://github.com/CristianGr233/service-discovery
-	
-[submodule "services/base-service"]
-	path = services/base-service
+
+[submodule "base-service"]
+	path = base-service
 	url = https://github.com/YoDineeee/base-service.git
+
+
+[submodule "crafting-service"]
+	path = crafting-service
+	url = https://github.com/YoDineeee/crafting-service.git
+
+
+
