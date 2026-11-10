@@ -14,3 +14,6 @@
 [submodule "services/base-service"]
 	path = services/base-service
 	url = https://github.com/YoDineeee/base-service.git
+[submodule "service-discovery-service"]
+	path = service-discovery-service
+	url = https://github.com/Daniel-Muntean4/service-discovery-service.git
