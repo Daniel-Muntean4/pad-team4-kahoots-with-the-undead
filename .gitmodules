@@ -9,7 +9,8 @@
 	url = git@github.com:Daniel-Muntean4/zombie-service.git
 [submodule "service-discovery"]
 	path = service-discovery
-	url = https://github.com/CristianGr233/service-discovery
+	url = https://github.com/Daniel-Muntean4/service-discovery-service.git
+	
 
 [submodule "base-service"]
 	path = base-service
