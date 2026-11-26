@@ -1,21 +1,22 @@
 [submodule "pad-gateway"]
 	path = pad-gateway
 	url = git@github.com:Daniel-Muntean4/pad-gateway.git
+
 [submodule "resource-service"]
 	path = resource-service
 	url = git@github.com:Daniel-Muntean4/resource-service.git
+
 [submodule "zombie-service"]
 	path = zombie-service
 	url = git@github.com:Daniel-Muntean4/zombie-service.git
+
 [submodule "service-discovery"]
 	path = service-discovery
 	url = https://github.com/Daniel-Muntean4/service-discovery-service.git
 	
-
 [submodule "base-service"]
 	path = base-service
 	url = https://github.com/YoDineeee/base-service.git
-
 
 [submodule "crafting-service"]
 	path = crafting-service
