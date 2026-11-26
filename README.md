@@ -1,3 +1,107 @@
+# Architecture
+
+
+```mermaid
+flowchart LR
+    client["Client<br/>(Postman / frontend)"]
+
+    subgraph compose["Docker Compose network"]
+        gateway["Gateway<br/>JavaScript · Express<br/>:8080<br/>round robin + circuit breaker<br/>+ GET response cache"]
+        sd["Service Discovery<br/>JavaScript · Express<br/>:8761<br/>registry · health checks · alerts"]
+        broker["Message Broker<br/>JavaScript · Express<br/>:8090<br/>queues · ack · redelivery · dead letters"]
+        player["Player Service<br/>Java · Spring Boot<br/>:8081"]
+        game["Game Service<br/>Java · Spring Boot<br/>:8082"]
+        zombie["Zombie Service ×3<br/>Java · Spring Boot<br/>:8081"]
+        resource["Resource Service ×3<br/>Java · Spring Boot<br/>:8082"]
+        base["Base Service<br/>Python · Flask<br/>:5007"]
+        crafting["Crafting Service<br/>Python · Flask<br/>:5008"]
+        cache[("Cache<br/>Redis 7.4 :6379<br/>GET answers · tokens · profiles<br/>LRU, no persistence")]
+
+        subgraph zcluster["zombie-db cluster (PostgreSQL 17)"]
+            zdb1[("zombie-db-1<br/>primary")]
+            zdb2[("zombie-db-2<br/>replica")]
+            zdb3[("zombie-db-3<br/>replica")]
+        end
+        subgraph rcluster["resource-db cluster (PostgreSQL 17)"]
+            rdb1[("resource-db-1<br/>primary")]
+            rdb2[("resource-db-2<br/>replica")]
+            rdb3[("resource-db-3<br/>replica")]
+        end
+        failover["DB Failover monitor<br/>bash · psql<br/>promotes a replica"]
+
+        etl["ETL Service<br/>Python · Flask<br/>:5009<br/>extract · transform · load<br/>every 60 s"]
+        dw[("Data Warehouse<br/>warehouse-db · PostgreSQL 17<br/>star schema: dimensions,<br/>snapshot facts, report views")]
+    end
+
+    world["World Service<br/>(mocked)"]
+    exam["Exam Service<br/>(mocked)"]
+    discord["Discord channel<br/>(webhook)"]
+
+    %% client -> gateway -> services
+    client -- "REST /api/**" --> gateway
+    client -- "GET /logs (download)" --> gateway
+    gateway -- "/api/players, /api/trades" --> player
+    gateway -- "/api/game, /api/lobbies, /api/sessions" --> game
+    gateway -- "/api/zombies" --> zombie
+    gateway -- "/api/resources" --> resource
+    gateway -- "/api/bases" --> base
+    gateway -- "/api/crafting" --> crafting
+    gateway -- "/api/warehouse" --> etl
+
+    %% discovery, monitoring, logs
+    gateway -- "GET /services every 3 s<br/>DELETE on circuit-breaker trip" --> sd
+    gateway -. "GET /health (aggregated)" .-> player & game & zombie & resource & base & crafting & etl
+    sd -. "GET /status every 10 s" .-> player & game & zombie & resource & base & crafting & broker & etl
+    broker -- "POST /register + heartbeat" --> sd
+    gateway -. "GET /logs of every instance" .-> sd & broker
+    sd -- "alerts" --> discord
+    game -. "planned: publish / receive" .-> broker
+
+    %% databases: replication + failover
+    zombie -- "JDBC, targetServerType=primary" --> zdb1
+    resource -- "JDBC, targetServerType=primary" --> rdb1
+    zdb1 == "streaming replication (WAL)" ==> zdb2 & zdb3
+    rdb1 == "streaming replication (WAL)" ==> rdb2 & rdb3
+    failover -. "check every 2 s,<br/>pg_promote() on failure" .-> zdb1 & zdb2 & zdb3 & rdb1 & rdb2 & rdb3
+
+    %% cache
+    gateway == "cache-aside: zombie / resource GETs,<br/>delete on write" ==> cache
+    player == "auth:token / auth:revoked,<br/>profiles" ==> cache
+    game == "auth:token / auth:revoked<br/>(shared with player)" ==> cache
+    base == "bases, rooms, barricades,<br/>token → role" ==> cache
+    crafting == "recipe catalog,<br/>token → role" ==> cache
+
+    %% data warehouse
+    etl -- "EXTRACT (prefer a replica)" --> zdb2 & rdb2
+    etl -- "LOAD (one transaction per run)" --> dw
+
+    %% service-to-service calls that are still mocked
+    game -. "XP on session end (mocked)" .-> player
+    game -. "map for session (mocked)" .-> world
+    game -. "action rewards (mocked)" .-> resource
+    base -. "annex / barricade cost (mocked)" .-> resource
+    base -. "barricades (mocked)" .-> world
+    base -. "use item from inventory (mocked)" .-> player
+    crafting -. "materials (mocked)" .-> resource
+    crafting -. "crafted item to inventory,<br/>player level (mocked)" .-> player
+    crafting -. "passed exams (mocked)" .-> exam
+    crafting -. "zone (mocked)" .-> world
+    crafting -. "facilities (mocked)" .-> base
+```
+
+- Solid arrows: implemented calls. Dotted arrows from game/base/crafting: service-to-service calls that are mocked inside the service for now (they log `[MOCK ...]`).
+- **Lab 5, forgotten components:** the gateway's aggregated `GET /health`, the mocked **Exam Service**, and the mocked calls of Base (World, Player) and Crafting (Player, Exam, World, Base) were implemented in earlier labs but missing from the diagram.
+- Lab 3: every service registers with the Service Discovery on startup (`POST /register`) and every 10 s (heartbeat); the Service Discovery polls their `/status` and posts alerts to Discord. The gateway balances over the registered instances (round robin) and removes an instance after 3 failures within `UPSTREAM_TIMEOUT_MS * 3.5`.
+- Lab 4: the **Message Broker** (queues with publish / receive / ack, redelivery, dead-letter queue) runs next to the Service Discovery and registers with it. `GET /logs` on the gateway downloads the logs of the whole system (Service Discovery, broker and every registered instance).
+- zombie-service and resource-service run 3 replicas each (state in PostgreSQL); the in-memory services run one instance.
+- Only the gateway publishes a port to the host (plus 8761 and 8090 for the demo); services and databases are reachable only inside the compose network.
+- Database per service: zombie-service and resource-service each own a PostgreSQL **cluster**.
+- The Game Service validates JWTs issued by the Player Service with the shared `JWT_SECRET`.
+- **Lab 5 – Cache:** one **Redis** (`cache`) inside the network. The gateway caches the GET answers of the scaled zombie/resource services and deletes them on every write through it. Player and Game share the authentication cache (`auth:token:<sha256>`, `auth:revoked:<sha256>`). Player caches profiles, Base and Crafting their most-read GETs and token lookups. If Redis is down, every component works without it.
+- **Lab 5 – Replication + failover:** each cluster has 1 primary + 2 streaming replicas (`postgres-ha` image). The **DB Failover monitor** promotes the most up-to-date replica when a primary misses 3 checks; the other replica follows the new primary and the old primary rejoins as a replica (a node that finds a newer primary stops itself, so there is never a split brain). The services list all three nodes in their JDBC URL with `targetServerType=primary`, so they find the new primary on their own. The primary/replica labels in the diagram are the initial roles.
+- **Lab 5 – Data Warehouse + ETL:** the **ETL Service** reads the zombie types/behaviours and the resource points from a replica (`target_session_attrs=prefer-standby`, so the players' primary is not loaded), cleans and enriches them (one spelling per id, danger score, fill ratio) and loads them into the **Data Warehouse** (`warehouse-db`): dimensions `dim_zombie_type`, `dim_room`, `dim_resource`, snapshot facts `fact_zombie_snapshot`, `fact_resource_snapshot`, report views, and an `etl_runs` log. Reports: `GET /api/warehouse/summary`, `/api/warehouse/resources/<resource>`, `/api/warehouse/etl/runs`.
+
+
 # Gateway
 
 The single point of entry of the system. Clients (Postman, a frontend) talk **only** to the gateway on
